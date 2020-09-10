@@ -1,0 +1,183 @@
+---
+title: "Project 2 - Classification"
+Description: The purpose of this file is to satisfy the requirements for Project 2
+  - Classification Algorithms of the Introduction to Machine Learning Course.
+Name: Dorian Benitez (drb160130)
+output: pdf_document
+Course: CS 4375.001
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Initial Setup
+
+```{r initial setup}
+df <- read.csv("adult.data.csv", header=TRUE, stringsAsFactors = FALSE)
+sapply(df, function(x) sum(is.na(x)==TRUE))
+
+str(df)
+```
+
+
+## Data Cleaning
+
+https://archive.ics.uci.edu/ml/datasets/Adult
+
+The "date" column was removed from the CSV file prior to R code execution. This was done as the data was not useful in classifying the desired data.
+
+This chunk of code will convert particular columns as factors, and will display the new structure of the data frame.
+
+```{r Data Cleaning}
+df$education <- as.factor(df$education)
+df$maritalStatus <- as.factor(df$maritalStatus)
+df$relationship <- as.factor(df$relationship)
+df$race <- as.factor(df$race)
+df$gender <- as.factor(df$gender)
+df$income <- as.factor(df$income)
+
+df <- df[!is.na(df$workClass),]
+df <- df[!is.na(df$education),]
+df <- df[!is.na(df$Occupation),]
+df <- df[!is.na(df$maritalStatus),]
+df <- df[!is.na(df$relationship),]
+df <- df[!is.na(df$race),]
+df <- df[!is.na(df$gender),]
+df <- df[!is.na(df$country),]
+df <- df[!is.na(df$income),]
+
+set.seed(1234)
+i <- sample(1:nrow(df), nrow(df)*0.75, replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+
+str(df)
+```
+
+
+## Data Exploration
+
+```{r Data Exploration}
+head(df)
+tail(df, n=10)
+summary(df)
+summary(df$relationship)
+contrasts(df$race)
+contrasts(df$gender)
+cor(df$hours, df$gain)
+plot(df$income, df$age)
+pairs(df[, c(1, 4, 10, 11, 12)])
+plot(df$gender, df$hours)
+```
+
+
+
+# Naive Bayes Classification
+
+Naive Bayes Classification was performed on this data frame because of it's popularity when it comes to classification algorithms. This algorithm in particular allows us to quantify how likely it is that an individual makes over $50k a year based on a number of variables. 
+
+Upon execution of the Naive Bayes algorithm, we are able to determine that it is much less likely for an individual to make >50k a year from within the dataset, rather than the latter. We are able to also view the correlation of data which remains at around 0.827. This is not the strongest reading, so we removed a variable to see if it may be responsible for the outcome. After the removal of educationYears from the data, we can see that the value decreases to 0.814. This shows that educationYears has a correlation in the odds of an individual making >50k a year.
+
+```{r Naive Bayes}
+library(e1071)
+nb1 <- naiveBayes(income~., data=train)
+nb1
+
+p1 <- predict(nb1, newdata=test, type="class")
+table(p1, test$income)
+print(paste("Mean =", mean(p1==test$income)))
+
+p1_raw <- predict(nb1, newdata=test, type="raw")
+head(p1_raw)
+
+nb2 <- naiveBayes(income~.-educationYears, data=train)
+p2 <- predict(nb2, newdata=test[,-4], type="class")
+table(p2, test$income)
+print(paste("Mean =", mean(p2==test$income)))
+```
+
+
+## Decision Tree
+
+Decision Tree Regression was performed on this data frame because it allows for the splitting of observations into proper partitions, allowing for the data to be placed into particular boundaries of which they belong. Although this algorithm is not the best when it comes to performance, it presents the data in a very strong and comprehensible manner, which is extremely beneficial and obtaining a visual understanding of the data frame.
+
+Upon complete execution of the Decision Tree Regression algorithm, we can see that there is a moderate correlation between the predicted and actual data collected with a very low RMSE value. We can also see that the income of an individual has a strong relationship with their relationship status and education level. Overall, this algorithm proved to be the strongest.
+
+```{r Decision Tree}
+library(tree)
+
+tree_df2 <- tree(income~., data=df)
+tree_df2
+summary(tree_df2)
+
+plot(tree_df2)
+text(tree_df2, cex=0.5, pretty=1)
+
+set.seed(1234)
+i <- sample(1:nrow(df), nrow(df)*0.75, replace=FALSE)
+train_tree <- df[i,]
+test_tree <- df[-i,]
+
+tree_df3 <- tree(income~., data=train_tree)
+pred_tree <- predict(tree_df3, newdata=test_tree, type="class")
+table(pred_tree, test_tree$income)
+mean(pred_tree == test_tree$income)
+```
+
+
+## SVM Classification
+
+SVM classification was performed on this data frame because it can be used in a number of scenarios and is very versatile in implementation, and is especially useful in multi-class classification. 
+
+Upon completion of execution, we can see that the correlation value is very high and the RMSE is the lowest value when compared to the other classification algorithms used, making this the most useful, although it does have a slower execution time than the other algorithms.
+
+```{r SVM}
+library(e1071)
+svm1 <- svm(income ~ age + educationYears + race + gender + hours + gain + loss, data=train, kernel="linear", cost=10, scale=TRUE)
+pred_svm <- predict(svm1, newdata=test)
+
+table(pred_svm, test$income)
+print(paste("Mean =", mean(pred_svm==test$income)))
+```
+
+
+# Random Forest Ensemble Method
+
+The random forest ensemble method was performed on this data frame because it works by aggregating the predictions made by multiple decision trees. This allows for us to develop a strong learning algorithm with fairly accurate results, although this algorithm has a slower runtime than most.
+
+Upon the execution of Random Forest, we can see that there is a very low correlation between the predicted and actual data values. Although there is a low RMSE value, that does not make up for the lack of correlation. 
+
+```{r}
+library(randomForest)
+
+rf <- randomForest(income ~ age + education + educationYears + maritalStatus + relationship + race + gender + gain + loss + hours, data=train, imporance=TRUE)
+
+pred_rf <- predict(rf, newdata=test)
+
+pred_rf <- as.numeric(pred_rf)
+incomeNum <- as.numeric(test$income)
+
+cor_rf <- cor(pred_rf, incomeNum)
+print(paste("cor = ", cor_rf))
+
+rmse_rf <- sqrt(mean(pred_rf - incomeNum)^2)
+print(paste("rmse = ", rmse_rf))
+```
+
+
+# Result Analysis
+
+The algorithms ranked best to worst for this data frame are:
+
+  1. Decision Tree
+  2. Naive Bayes
+  3. SVM
+  
+The reason behind these rankings are based upon the fact that the RMSE and correlation values obtained from the Decision Tree algorithm are the strongest, followed by the naive bayes algorithm, then the SVM algorithm. 
+
+I believe the reason Decision Tree functioned best is based on it's ability to closely mirror the human-decision making process. By conditionally handling data to achieve the most logical fit, this showed to be the strongest algorithm between the others used. Although decision trees generally do not have the same level of accuracy when compared to many other algorithms, this case seems to be an exception.
+
+Overall, this script was able to learn the relationship between the income of an individual and their various personal attributes. With the final results, we are able to determine that the likelihood of an individual making >50k a year has a strong correlation to their marital status, education, age, and gender. With this, we found that a married white male from the United States with a Bachelor's Degree has the greatest likelihood of making >50k a year compared to the other values within the data set. 
+

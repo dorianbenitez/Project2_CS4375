@@ -1,0 +1,170 @@
+---
+title: 'Project #2 - Regression'
+Description: The purpose of this file is to satisfy the requirements for Project 2 - Regression Algorithms of the Introduction to Machine Learning Course.
+Name: Dorian Benitez (drb160130)
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+Course: CS 4375.001
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initial Setup
+
+```{r initial setup}
+df <- read.csv("diamonds.csv", header=TRUE, stringsAsFactors = FALSE)
+str(df)
+sapply(df, function(x) sum(is.na(x)==TRUE))
+```
+
+
+# Data Cleaning
+
+Links to data-set and documentation:
+1. https://vincentarelbundock.github.io/Rdatasets/datasets.html
+2. https://vincentarelbundock.github.io/Rdatasets/doc/ggplot2/diamonds.html
+
+This is dataset is called "diamonds" and contains the prices and other attributes of almost 54,000 diamonds.
+
+The columns "table", "color", and "index" were manually removed from the CSV file as the data was not necessary for obtaining our final solutions. 
+
+This chunk of code will convert two columns into factors, and will display the new structure of the data frame.
+
+```{r data cleaning}
+df$cut <- as.factor(df$cut)
+df$clarity <- as.factor(df$clarity)
+str(df)
+```
+
+
+# Data Exploration
+
+```{r data exploration}
+head(df)
+summary(df)
+contrasts(df$cut)
+contrasts(df$clarity)
+cor(df$x, df$y)
+hist(df$price)
+plot(df$price, df$carat, pch='+', cex=0.75, col="blue", xlab="Price", ylab="Carat")
+abline(lm(df$carat ~ df$price), col="red")
+```
+
+
+# Linear Regression 
+
+Linear regression was performed on this data frame because it is relatively simple and powerful, and provides strong information of the relationship held between two attribute values within a data frame. The values used in this model are "price" and "carat", with hopes to learn more of the relationship held between the two variables.
+
+Upon completion of the linear regression model, we can see that there is a strong relationship held between the value of price and carat of a diamond. This can be seen as there is a high correlation value, and the plot follows the same pattern as the predicted abline values. This represents that the predicted data trend is accurate to the actual results depicted from the data frame. 
+
+```{r linear regression}
+set.seed(1234)
+i <- sample(1:nrow(df), nrow(df)*0.75, replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+
+lm1 <- lm(formula = price ~ carat, data=train)
+summary(lm1)
+pred <- predict(lm1, newdata= test)
+cor_lm <- cor(pred, test$price)
+rmse_lm <- sqrt(mean(pred-test$price)^2)
+print(paste("cor = ", cor_lm))
+
+rmse <- sqrt(mean((pred - lm1$residuals)^2))
+print(paste("RMSE: ", rmse))
+
+plot(train$price~train$carat, xlab="Carat", ylab = "MPG")
+abline(lm1, col="blue")
+predict1 <- predict(lm1, data.frame(carat = 98))
+print(paste(predict1))
+```
+
+
+# KNN Regression
+
+KNN Regression was performed on this data frame because it provides intuitive information collected from the data, without actually forming varoius models. Rather, all of the training observations will be made in memory for simpler access. Then, once a new observation requires evaluation, the algorithm can reference in memory and find the closest neighbors to the observation. 
+
+Upon complete execution of the KNN regression algorithm, we can see that there is a strong correlation between the data and a lower MSE than the Linear Regression algorithm. As the value of k increases, there is a greater correlation and lower RMSE values, showing that k=15 provides the best results over the other values.
+
+```{r knn regression}
+library(caret)
+lm_knn <- lm(price ~., data=train)
+summary(lm_knn)
+train_knn <- train[, c(1,4,6)]
+test_knn <- test[, c(1,4,6)]
+means <- sapply(train_knn, mean)
+stdevs <- sapply(train_knn, sd)
+train_knn <- scale(train_knn, center = means, scale = stdevs)
+test_knn <- scale(test_knn, center=means, scale=stdevs)
+
+for (i in c(5, 10, 15)){
+  fit_knn <- knnreg(train_knn, train$price, k=i)
+  pred_knn <- predict(fit_knn, test_knn)
+  print(paste("k= ", i))
+  print(paste("cor = ", cor(pred_knn, test$price)))
+  print(paste("rmse = ", sqrt(mean(pred_knn-test$price)^2)))
+}
+```
+
+
+
+# Decision Tree Regression
+
+Decision Tree Regression was performed on this data frame because it allows for the splitting of observations into proper partitions, allowing for the data to be placed into particular boundaries of which they belong. Although this algorithm is not the best when it comes to performance, it presents the data in a very strong and comprehensible manner, which is extremely beneficial and obtaining a visual understanding of the data frame.
+
+Upon complete execution of the Decision Tree Regression algorithm, we can see that there is a strong correlation between the predicted and actual data collected with a very low RMSE value. We can also see that the price of a diamond relies heavily on the amount of carats, and the width of each diamond.  
+
+```{r decision tree regression}
+library(tree)
+tree1 <- tree(price ~., data=train)
+plot(tree1)
+text(tree1, cex=0.5, pretty=0)
+
+pred_tree <- predict(tree1, newdata=test)
+cor_tree <- cor(pred_tree, test$price)
+print(paste("cor = ", cor_tree))
+
+rmse_tree <- sqrt(mean(pred_tree - test$price)^2)
+print(paste("rmse = ", rmse_tree))
+```
+
+
+# XGBoost
+
+XGBoost was performed on this data frame because it is extremely scalable and runs very fast when compared to other algorithms. XGBoost focuses on the speed of execution, while still providing optimal accuracy and clarity.
+
+Upon execution of XGBoost, we can see that after 200 rounds of learning, the algorithm is able to predict the data with a correlation value of 99.9% and an extremely low RMSE. This represents the ability for the algorithm to learn successfully from the data and make accurate predictions over time. 
+
+```{r xgboost}
+library(xgboost)
+train_mat <- data.matrix(train[, -3])
+xmod <- xgboost(data=train_mat, label=train$price, nrounds=200, objective='reg:squarederror')
+
+test_mat <- data.matrix(test[, -3])
+pred_x <- predict(xmod, newdata=test_mat)
+
+corx <- cor(pred_x, test$price)
+rmsx <- sqrt(mean(pred_x-test$price)^2)
+print(paste("cor = ", corx))
+
+print(paste("rmse = ", rmsx))
+```
+
+
+# Result Analysis
+
+The algorithms ranked best to worst for this data frame are:
+  1. KNN
+  2. Decision Tree
+  3. Linear Regression
+  
+The reason behind these rankings are based upon the fact that the RMSE and correlation values for the KNN are the strongest, followed by the decision tree output, then the linear regression model values. 
+
+I believe the reason KNN was the best algorithm out of the three is because it was accurately able to depict the values within the data frame and test out different data values that would best fit the data, rather than having a single instance observation.
+
+Overall, this script was able to learn the relationship between the price of a diamond based upon it's amount of carats, cut, clarity, depth, length, and width. With the final results, we are able to determine that the price of a diamond has the strongest relationship with the amount of carats inside, and the width of the diamond when measured in millimeters. As each of these values increase, the price of a diamond tends to increase as well. 
+
